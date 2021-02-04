@@ -6,27 +6,31 @@
             dblclick: true,
             button: true,
             buttonSelector: ".edit",
+            cancelbuttonSelector:".cancel",
+            numbers:[],
             maintainWidth: true,
             dropdowns: {},
+            inputclass:"form-control",
             edit: function() {},
             save: function() {},
             cancel: function() {}
-        };
-
+        },
+        rowlist = [], counter = 0;
+        
     function editable(element, options) {
         this.element = element;
         this.options = $.extend({}, defaults, options) ;
 
         this._defaults = defaults;
         this._name = pluginName;
-
+        $(element).attr(`data-${pluginName}-id`,(++counter));
         this.init();
     }
 
     editable.prototype = {
         init: function() {
             this.editing = false;
-
+            
             if (this.options.dblclick) {
                 $(this.element)
                     .css('cursor', 'pointer')
@@ -36,11 +40,18 @@
             if (this.options.button) {
                 $(this.options.buttonSelector, this.element)
                     .bind('click', this.toggle.bind(this));
+                $(this.options.cancelbuttonSelector, this.element)
+                .bind('click', this.cancel.bind(this));
             }
         },
 
         toggle: function(e) {
             e.preventDefault();
+
+            if( $(rowlist[0]).data(pluginName+"-id") != $(this.element).data(pluginName+"-id") && rowlist.length > 0 )
+            { 
+                return false;
+            }
 
             this.editing = !this.editing;
 
@@ -55,10 +66,11 @@
             var instance = this,
                 values = {};
 
+                rowlist.push(this.element);
             $('td[data-field]', this.element).each(function() {
                 var input,
                     field = $(this).data('field'),
-                    value = $(this).text(),
+                    value = $(this).text().trim(),
                     width = $(this).width();
 
                 values[field] = value;
@@ -80,12 +92,22 @@
 
                     input.val(value)
                          .data('old-value', value)
+                         .addClass(instance.options.inputclass)
                          .dblclick(instance._captureEvent);
-                } else {
-                    input = $('<input type="text" />')
-                        .val(value)
-                        .data('old-value', value)
-                        .dblclick(instance._captureEvent);
+                } else if(instance.options.numbers.length > 0){
+                    if(instance.options.numbers.includes(field)){
+                        input = $('<input type="number" />')
+                            .val(value)
+                            .addClass(instance.options.inputclass)
+                            .data('old-value', value)
+                            .dblclick(instance._captureEvent);
+                    }else{
+                        input = $('<input type="text" />')
+                            .val(value)
+                            .addClass(instance.options.inputclass)
+                            .data('old-value', value)
+                            .dblclick(instance._captureEvent);
+                    }
                 }
 
                 input.appendTo(this);
@@ -101,7 +123,7 @@
         save: function() {
             var instance = this,
                 values = {};
-
+            rowlist.pop();
             $('td[data-field]', this.element).each(function() {
                 var value = $(':input', this).val();
 
@@ -117,15 +139,23 @@
         cancel: function() {
             var instance = this,
                 values = {};
+            rowlist.pop();
+            if(this.editing){
+                this.editing = !this.editing;
+                $('td[data-field]', this.element).each(function() {
+                    var value = $(':input', this).data('old-value');
 
-            $('td[data-field]', this.element).each(function() {
-                var value = $(':input', this).data('old-value');
-
-                values[$(this).data('field')] = value;
-
-                $(this).empty()
-                       .text(value);
-            });
+                    values[$(this).data('field')] = value;
+                    
+                    $(this).empty()
+                        .text(value);
+                });
+            }else{
+                $('td[data-field]', this.element).each(function() {
+                    var value = $(this).text();
+                    values[$(this).data('field')] = value;
+                });
+            }
 
             this.options.cancel.bind(this.element)(values);
         },
@@ -135,6 +165,11 @@
         },
 
         _captureKey: function(e) {
+            if( $(rowlist[0]).data(pluginName+"-id") != $(this.element).data(pluginName+"-id") && rowlist.length > 0 )
+            { 
+                return false;
+            }
+            
             if (e.which === 13) {
                 this.editing = false;
                 this.save();
